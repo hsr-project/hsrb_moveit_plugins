@@ -31,23 +31,15 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
 */
 
-#include <fstream>
-
 #include <gtest/gtest.h>
+
+#include <tmc_manipulation_tests/configs.hpp>
 
 #include "../src/hsrb_moveit_kinematics.hpp"
 
 namespace {
 void DeclareRobotDescription(const rclcpp::Node::SharedPtr& node) {
-  std::fstream xml_file("robot_description.urdf", std::fstream::in);
-  std::string robot_description;
-  while (xml_file.good()) {
-    std::string line;
-    std::getline(xml_file, line);
-    robot_description += (line + "\n");
-  }
-  xml_file.close();
-  node->declare_parameter("robot_description", robot_description);
+  node->declare_parameter("robot_description", tmc_manipulation_tests::hsrb::GetUrdf());
 }
 }  // namespace
 
@@ -65,25 +57,18 @@ class HSRBKinematicsPluginTest : public ::testing::Test {
 void HSRBKinematicsPluginTest::SetUp() {
   node_ = rclcpp::Node::make_shared("test_node");
   DeclareRobotDescription(node_);
-  node_->declare_parameter("robot_name", "hsrb");
 }
 
-// initializeのテスト
+// Initialize test
 TEST_F(HSRBKinematicsPluginTest, initialize) {
   {
-    // 特に何も設定していないくても成功する
+    // Successful even if you don't set anything
     HSRBKinematicsPlugin p;
     EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
   }
-  {
-    node_->undeclare_parameter("robot_name");
-
-    HSRBKinematicsPlugin p;
-    EXPECT_FALSE(p.initialize(node_, *robot_model_, "test_fail_1", "odom", {"hand_palm_link"}, 0.0));
-  }
 }
 
-// getLinkNamesのテスト
+// GetLinknames test
 TEST_F(HSRBKinematicsPluginTest, getLinkNames) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -100,7 +85,7 @@ TEST_F(HSRBKinematicsPluginTest, getLinkNames) {
   EXPECT_NE(std::find(link_names.begin(), link_names.end(), "wrist_roll_link"), link_names.end());
 }
 
-// getJointNamesのテスト
+// GetJointNames test
 TEST_F(HSRBKinematicsPluginTest, getJointNames) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -117,14 +102,14 @@ TEST_F(HSRBKinematicsPluginTest, getJointNames) {
   EXPECT_NE(std::find(joint_names.begin(), joint_names.end(), "wrist_roll_joint"), joint_names.end());
 }
 
-// supportsGroupのテスト
+// SupportSgroup test
 TEST_F(HSRBKinematicsPluginTest, supportsGroup) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
   EXPECT_TRUE(p.supportsGroup(NULL, NULL));
 }
 
-// デフォルトの重みでIKを解く
+// Solve IK with the default weight
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKWithDefaultWeight) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -143,19 +128,19 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKWithDefaultWeight) {
   std::vector<double> solution;
   moveit_msgs::msg::MoveItErrorCodes error_code;
   EXPECT_TRUE(p.searchPositionIK(ik_pose, ik_seed_state, 0, solution, error_code));
-  // 表示させて答えを作った
+  // I made the answer by displaying it
   ASSERT_EQ(8, solution.size());
-  // EXPECT_NEAR(0.838948,    solution[0], 1e-6);
-  // EXPECT_NEAR(-0.0726981,  solution[1], 1e-6);
-  // EXPECT_NEAR(-0.0358925,  solution[2], 1e-6);
-  // EXPECT_NEAR(0.174505,    solution[3], 1e-6);
-  // EXPECT_NEAR(-0.00100738, solution[4], 1e-6);
-  // EXPECT_NEAR(-0,          solution[5], 1e-6);
-  // EXPECT_NEAR(0.00100738,  solution[6], 1e-6);
-  // EXPECT_NEAR(0.0358925,   solution[7], 1e-6);
+  EXPECT_NEAR(0.838948,    solution[0], 1e-6);
+  EXPECT_NEAR(-0.0726981,  solution[1], 1e-6);
+  EXPECT_NEAR(-0.0358925,  solution[2], 1e-6);
+  EXPECT_NEAR(0.174505,    solution[3], 1e-6);
+  EXPECT_NEAR(-0.00100738, solution[4], 1e-6);
+  EXPECT_NEAR(-0,          solution[5], 1e-6);
+  EXPECT_NEAR(0.00100738,  solution[6], 1e-6);
+  EXPECT_NEAR(0.0358925,   solution[7], 1e-6);
 }
 
-// カスタムされた重みで解く
+// Solve with a custom weight
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKWithDeclaredWeight) {
   node_->declare_parameter<std::vector<double>>("weight_test.joint_weight", {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0});
 
@@ -176,7 +161,7 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKWithDeclaredWeight) {
   std::vector<double> solution;
   moveit_msgs::msg::MoveItErrorCodes error_code;
   EXPECT_TRUE(p.searchPositionIK(ik_pose, ik_seed_state, 0, solution, error_code));
-  // 表示させて答えを作った
+  // I made the answer by displaying it
   ASSERT_EQ(8, solution.size());
   EXPECT_NEAR(0.794193,    solution[0], 1e-6);
   EXPECT_NEAR(-0.0712208,  solution[1], 1e-6);
@@ -188,7 +173,7 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKWithDeclaredWeight) {
   EXPECT_NEAR(0.0352144,   solution[7], 1e-6);
 }
 
-// 解がでない場合
+// If the solution is not
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKNoSolution) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -209,7 +194,7 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKNoSolution) {
   EXPECT_FALSE(p.searchPositionIK(ik_pose, ik_seed_state, 0, solution, error_code));
 }
 
-// activeでない
+// Not Active
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKNotActive) {
   HSRBKinematicsPlugin p;
   EXPECT_FALSE(p.initialize(node_, *robot_model_, "group", "baselink", {"hand_palm_link"}, 0.0));
@@ -230,7 +215,7 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKNotActive) {
   EXPECT_FALSE(p.searchPositionIK(ik_pose, ik_seed_state, 0, solution, error_code));
 }
 
-// dimenstionが無効
+// Dimension is invalid
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKInvalidDimension) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -251,7 +236,7 @@ TEST_F(HSRBKinematicsPluginTest, searchPositionIKInvalidDimension) {
   EXPECT_FALSE(p.searchPositionIK(ik_pose, ik_seed_state, 0, solution, error_code));
 }
 
-// consistency_limitsのサイズが無効
+// CONSISTENCY_LIMITS size is invalidated
 TEST_F(HSRBKinematicsPluginTest, searchPositionIKInvalidConsistencyLimits) {
   HSRBKinematicsPlugin p;
   EXPECT_TRUE(p.initialize(node_, *robot_model_, "group", "odom", {"hand_palm_link"}, 0.0));
@@ -279,34 +264,34 @@ TEST_F(HSRBKinematicsPluginTest, getPositionIK) {
 
   std::vector<double> joint_angles(8, 0.0);
 
-  // link_namesを与えなくてもFKは成功
+  // FK is successful without giving Link_names
   std::vector<geometry_msgs::msg::Pose> poses;
   EXPECT_TRUE(p.getPositionFK({}, joint_angles, poses));
 
   EXPECT_TRUE(p.getPositionFK({"hand_palm_link"}, joint_angles, poses));
   ASSERT_EQ(poses.size(), 1);
 
-  // 答えは表示させて作った
-  // EXPECT_NEAR(poses[0].position.x, 0.158, 1e-6);
-  // EXPECT_NEAR(poses[0].position.y, 0.078, 1e-6);
-  // EXPECT_NEAR(poses[0].position.z, 0.8255, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.x, 0, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.y, 0, 1e-6);
-  // EXPECT_NEAR(std::abs(poses[0].orientation.z), 1, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.w, 0, 1e-6);
+  // The answer was made by displaying it
+  EXPECT_NEAR(poses[0].position.x, 0.158, 1e-6);
+  EXPECT_NEAR(poses[0].position.y, 0.078, 1e-6);
+  EXPECT_NEAR(poses[0].position.z, 0.8255, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.x, 0, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.y, 0, 1e-6);
+  EXPECT_NEAR(std::abs(poses[0].orientation.z), 1, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.w, 0, 1e-6);
 
-  // base_footprintもFK
+  // Base_footPrint is also FK
   joint_angles[0] = 1.0;
   EXPECT_TRUE(p.getPositionFK({"hand_palm_link", "base_footprint"}, joint_angles, poses));
   ASSERT_EQ(poses.size(), 2);
 
-  // EXPECT_NEAR(poses[0].position.x, 1.158, 1e-6);
-  // EXPECT_NEAR(poses[0].position.y, 0.078, 1e-6);
-  // EXPECT_NEAR(poses[0].position.z, 0.8255, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.x, 0, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.y, 0, 1e-6);
-  // EXPECT_NEAR(std::abs(poses[0].orientation.z), 1, 1e-6);
-  // EXPECT_NEAR(poses[0].orientation.w, 0, 1e-6);
+  EXPECT_NEAR(poses[0].position.x, 1.158, 1e-6);
+  EXPECT_NEAR(poses[0].position.y, 0.078, 1e-6);
+  EXPECT_NEAR(poses[0].position.z, 0.8255, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.x, 0, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.y, 0, 1e-6);
+  EXPECT_NEAR(std::abs(poses[0].orientation.z), 1, 1e-6);
+  EXPECT_NEAR(poses[0].orientation.w, 0, 1e-6);
 
   EXPECT_NEAR(poses[1].position.x, 1, 1e-6);
   EXPECT_NEAR(poses[1].position.y, 0, 1e-6);
@@ -316,9 +301,9 @@ TEST_F(HSRBKinematicsPluginTest, getPositionIK) {
   EXPECT_NEAR(poses[1].orientation.z, 0, 1e-6);
   EXPECT_NEAR(poses[1].orientation.w, 1, 1e-6);
 
-  // // 存在しないリンクだと失敗
-  // EXPECT_FALSE(p.getPositionFK({"dummy"}, joint_angles, poses));
-  // 関節角が8個ないとFKは失敗
+  // Failure if it is a link that does not exist
+  EXPECT_FALSE(p.getPositionFK({"dummy"}, joint_angles, poses));
+  // FK fails without eight joint angles
   EXPECT_FALSE(p.getPositionFK({"hand_palm_link"}, std::vector<double>(7, 0.0), poses));
   EXPECT_FALSE(p.getPositionFK({"hand_palm_link"}, std::vector<double>(9, 0.0), poses));
 }

@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)
 project(hsrb_moveit_plugins)
 
-# For using pinocchio library used in tmc_robot_kinematics_model
-SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,/opt/openrobots/lib")
-
 find_package(ament_cmake REQUIRED)
 find_package(hsrb_analytic_ik REQUIRED)
 find_package(moveit_core REQUIRED)
@@ -23,9 +20,11 @@ install(TARGETS ${PROJECT_NAME}
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(tmc_manipulation_tests REQUIRED)
 
   ament_add_gtest(hsrb_moveit_kinematics_test test/hsrb_moveit_kinematics-test)
   target_link_libraries(hsrb_moveit_kinematics_test ${PROJECT_NAME})
+  ament_target_dependencies(hsrb_moveit_kinematics_test tmc_manipulation_tests)
 endif()
 
 ament_export_include_directories()

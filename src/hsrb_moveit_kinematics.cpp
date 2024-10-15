@@ -30,11 +30,14 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
 */
+
 #include "hsrb_moveit_kinematics.hpp"
+#include <memory>
 #include <string>
 #include <vector>
 #include <moveit/robot_model/robot_model.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <urdf/model.h>
 #include <hsrb_analytic_ik/hsrb_ik_solver.hpp>
 #include <hsrb_analytic_ik/hsrc_ik_solver.hpp>
 #include <tmc_robot_kinematics_model/robot_kinematics_model.hpp>
@@ -59,7 +62,7 @@ bool HSRBKinematicsPlugin::initialize(
 
   std::string robot_description;
   node->get_parameter("robot_description", robot_description);
-  robot_.reset(new PinocchioWrapper(robot_description));
+  robot_ = std::make_shared<PinocchioWrapper>(robot_description);
 
   dimension_ = 8;
 
@@ -81,33 +84,30 @@ bool HSRBKinematicsPlugin::initialize(
   link_names_.push_back("wrist_flex_link");
   link_names_.push_back("wrist_roll_link");
 
-  // 利用関節名
+  // Usage joint name
   use_joints_.push_back("arm_lift_joint");
   use_joints_.push_back("arm_flex_joint");
   use_joints_.push_back("arm_roll_joint");
   use_joints_.push_back("wrist_flex_joint");
   use_joints_.push_back("wrist_roll_joint");
 
-  const std::string solver_robot_name = robot_model.getName();
+  // Acquisition of robot name
+  std::string solver_robot_name;
+  urdf::Model urdf_model;
+  urdf_model.initString(robot_description);
+  solver_robot_name = urdf_model.getName();
+
   if (solver_robot_name == "hsrc") {
-    solver_.reset(new hsrb_analytic_ik::HsrcIKSolver(IKSolver::Ptr()));
+    solver_ = std::make_shared<hsrb_analytic_ik::HsrcIKSolver>(IKSolver::Ptr());
   } else {
-    solver_.reset(new hsrb_analytic_ik::HsrbIKSolver(IKSolver::Ptr()));
+    solver_ = std::make_shared<hsrb_analytic_ik::HsrbIKSolver>(IKSolver::Ptr());
   }
 
   if (node->has_parameter({group_name + ".joint_weight"})) {
     node->get_parameter(group_name + ".joint_weight", weights_);
   }
   if (weights_.size() != dimension_) {
-    weights_.clear();
-    weights_.push_back(5.0);
-    weights_.push_back(1.0);
-    weights_.push_back(1.0);
-    weights_.push_back(1.0);
-    weights_.push_back(1.0);
-    weights_.push_back(3.0);
-    weights_.push_back(3.0);
-    weights_.push_back(5.0);
+    weights_ = {10.0, 10.0, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0};
   }
 
   if (tip_frames.size() != 1 || tip_frames[0] != "hand_palm_link") {
@@ -194,24 +194,24 @@ bool HSRBKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_p
 
   solution.resize(dimension_);
 
-  // 手先目標位置の変換
+  // Conversion of hand target position
   Eigen::Affine3d ref_origin_to_end;
   tf2::fromMsg(ik_pose, ref_origin_to_end);
 
-  // 数値IKの関節の初期値
+  // Initial value of numerical IK joints
   Eigen::VectorXd init_angle;
   init_angle.resize(dimension_ - 3);
   for (int i = 0; i < dimension_ - 3; ++i) {
     init_angle[i] = ik_seed_state[i + 3];
   }
 
-  // 台車の自由度をplanar拘束(x,y,θに設定
+  // Planar restraint (set x, y, θ)
   IKRequest req(tmc_manipulation_types::kPlanar);
   req.frame_name = "hand_palm_link";
   req.frame_to_end = Eigen::Affine3d::Identity();
   req.initial_angle.name = use_joints_;
   req.use_joints = use_joints_;
-  // 関節の重み。ただし後ろ3つは台車の分。
+  // The weight of the joints.However, the back three is the bogie.
   req.weight = Eigen::Map<const Eigen::VectorXd>(&weights_[0], weights_.size());
   req.ref_origin_to_end = ref_origin_to_end;
   req.initial_angle.position = init_angle;
@@ -237,7 +237,7 @@ bool HSRBKinematicsPlugin::searchPositionIK(const geometry_msgs::msg::Pose& ik_p
     }
 
     error_code.val = error_code.SUCCESS;
-    if (!solution_callback.empty()) {
+    if (solution_callback) {
       solution_callback(ik_pose, solution, error_code);
     }
   }
@@ -251,7 +251,7 @@ bool HSRBKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_na
     RCLCPP_ERROR_STREAM(LOGGER, "joint_angles size is not " << dimension_);
     return false;
   }
-  // 関節角の設定
+  // Global angle settings
   JointState joint_state;
   joint_state.name = use_joints_;
   joint_state.position.resize(dimension_ - 3);
@@ -259,7 +259,7 @@ bool HSRBKinematicsPlugin::getPositionFK(const std::vector<std::string>& link_na
     joint_state.position[i] = joint_angles[i + 3];
   }
   robot_->SetNamedAngle(joint_state);
-  // ベース位置の設定
+  // Setting of base position
   Eigen::Affine3d origin_to_base;
   origin_to_base = Eigen::Translation3d(joint_angles[0], joint_angles[1], 0)
                  * Eigen::AngleAxisd(joint_angles[2], Eigen::Vector3d::UnitZ());
